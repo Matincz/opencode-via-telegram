@@ -75,19 +75,38 @@ Open Telegram, find your bot, and start chatting!
 
 ---
 
-## Run as a Background Service (macOS)
+## Run as Background Services (macOS)
 
-To automatically start the bridge at login and keep it running:
+For fully automated, always-on operation: run **both** OpenCode and the bridge as launchd services.
+
+### Step 1 — OpenCode as a service
 
 ```bash
-# 1. Copy and edit the example plist
+# Find where opencode is installed
+which opencode
+
+# Copy and edit the example plist
+cp com.user.opencode.server.plist.example ~/Library/LaunchAgents/com.user.opencode.server.plist
+```
+
+Open the plist and update the `opencode` binary path to match the output of `which opencode`. Then:
+
+```bash
+launchctl load ~/Library/LaunchAgents/com.user.opencode.server.plist
+launchctl start com.user.opencode.server
+# Verify it's running:
+curl http://127.0.0.1:4096/session
+```
+
+### Step 2 — Bridge as a service
+
+```bash
 cp com.user.telegram.bridge.plist.example ~/Library/LaunchAgents/com.user.telegram.bridge.plist
 ```
 
-Open `~/Library/LaunchAgents/com.user.telegram.bridge.plist` and replace all `YOUR_USERNAME` with your actual macOS username, and update `WorkingDirectory` to the full path of this repo.
+Open the plist and replace all `YOUR_USERNAME` with your macOS username and set `WorkingDirectory` to the full path of this repo.
 
 ```bash
-# 2. Load the service
 launchctl load ~/Library/LaunchAgents/com.user.telegram.bridge.plist
 launchctl start com.user.telegram.bridge
 ```
@@ -96,12 +115,14 @@ launchctl start com.user.telegram.bridge
 
 ```bash
 # View logs
-tail -f /tmp/telegram-bridge.log
+tail -f /tmp/opencode.log          # OpenCode
+tail -f /tmp/telegram-bridge.log   # Bridge
 
-# Restart after config changes
+# Restart bridge after config changes
 launchctl stop com.user.telegram.bridge && launchctl start com.user.telegram.bridge
 
-# Stop permanently
+# Stop everything
+launchctl unload ~/Library/LaunchAgents/com.user.opencode.server.plist
 launchctl unload ~/Library/LaunchAgents/com.user.telegram.bridge.plist
 ```
 
@@ -121,11 +142,12 @@ launchctl unload ~/Library/LaunchAgents/com.user.telegram.bridge.plist
 
 ```
 opencode-telegram-bridge/
-├── index.ts                          # Main bridge code
+├── index.ts                                    # Main bridge code
 ├── package.json
 ├── bun.lock
-├── .env.example                      # Template for environment variables
-├── com.user.telegram.bridge.plist.example  # macOS launchd service template
+├── .env.example                                # Template for environment variables
+├── com.user.opencode.server.plist.example      # macOS launchd service for OpenCode
+├── com.user.telegram.bridge.plist.example      # macOS launchd service for the bridge
 └── .gitignore
 ```
 
