@@ -1,5 +1,5 @@
 {
-  "name": "opencode-telegram-bridge",
+  "name": "opencode-via-telegram",
   "version": "1.0.0",
   "description": "Telegram bridge for OpenCode using bun",
   "main": "index.ts",
