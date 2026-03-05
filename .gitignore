@@ -1,0 +1,22 @@
+# Environment variables — DO NOT commit
+.env
+
+# Session state (auto-generated at runtime)
+sessions-map.json
+
+# Node / Bun
+node_modules/
+
+# Logs
+*.log
+output.txt
+event.log
+
+# Debug scripts
+debug*.ts
+debug*.js
+test-*.ts
+test-*.js
+
+# macOS
+.DS_Store
