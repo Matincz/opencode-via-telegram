@@ -3,6 +3,7 @@
 
 # Session state (auto-generated at runtime)
 sessions-map.json
+selected-models.json
 
 # Node / Bun
 node_modules/
@@ -11,6 +12,9 @@ node_modules/
 *.log
 output.txt
 event.log
+
+# Runtime caches
+.cache/
 
 # Debug scripts
 debug*.ts
