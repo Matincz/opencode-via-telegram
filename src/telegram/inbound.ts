@@ -100,7 +100,9 @@ export function parseCommandText(bodyText: string): { cmd: string; args: string 
   const trimmed = bodyText.trim()
   if (!trimmed.startsWith("/")) return null
   const commandToken = trimmed.split(/\s+/, 1)[0] ?? ""
-  const cmd = commandToken.toLowerCase()
+  // Telegram 有时会在命令后附加 @BotName（如 /projects@MyBot），需去掉
+  const bareToken = commandToken.includes("@") ? commandToken.slice(0, commandToken.indexOf("@")) : commandToken
+  const cmd = bareToken.toLowerCase()
   const args = trimmed.slice(commandToken.length).trim()
   return { cmd, args }
 }

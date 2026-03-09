@@ -1,184 +1,260 @@
-# OpenCode Telegram Bridge
+# OpenCode via Telegram
 
-> 通过 Telegram 使用 [OpenCode](https://opencode.ai) — 支持流式输出、思考过程气泡、打字机效果。
+Use [OpenCode](https://opencode.ai) from Telegram with persistent sessions, project switching, streaming replies, permission approval, and file/image input.
 
----
+This project is a local bridge:
 
-## 功能特性
+```text
+Telegram <-> Telegram Bot API <-> OpenCode via Telegram <-> OpenCode backend
+```
 
-- 💬 **流式输出** — AI 打字时消息实时更新
-- 🤔 **思考过程显示** — 单独气泡展示，1 分钟后自动删除
-- ⌨️ **打字机效果** — 平滑逐字渲染
-- 🔒 **用户白名单** — 只有你的 Telegram ID 才能访问 Bot
-- ♻️ **会话持久化** — 重启 Bridge 后对话上下文不丢失
-- 🛠️ **工具状态展示** — AI 执行工具时显示进度（如 `⚙️ 正在执行: bash`）
-- � **Markdown 渲染** — 代码块、粗体、斜体、链接在 Telegram 中正确显示
+It is designed for a single trusted operator. The bridge runs on your machine, talks to your local OpenCode backend, and exposes that workflow through a Telegram bot you control.
 
----
+## What it supports
 
-## 前置依赖
+- Streaming assistant output in Telegram
+- Temporary reasoning bubbles with auto-delete
+- Persistent session mapping across restarts
+- Project switching and session switching
+- Permission approval with inline buttons
+- OpenCode `question` prompts in Telegram
+- Image and file input:
+  - `photo`
+  - `document`
+  - `video`
+  - `audio`
+  - `voice`
+  - `animation`
+  - static `sticker`
+- Model selection from configured providers
+- Slash commands for common OpenCode actions
+- Single-instance lock to avoid Telegram polling conflicts
 
-| 依赖 | 安装方式 |
-|---|---|
-| [Bun](https://bun.sh) ≥ 1.0 | `curl -fsSL https://bun.sh/install \| bash` |
-| [OpenCode](https://opencode.ai) | 参见 OpenCode 文档，需在本地运行 |
-| Telegram Bot Token | 通过 [@BotFather](https://t.me/BotFather) 创建 |
-| 你的 Telegram 用户 ID | 通过 [@userinfobot](https://t.me/userinfobot) 获取 |
+## Recommended setup
 
----
+Recommended: run OpenCode Desktop or `opencode web`, then run this bridge.
 
-## 快速开始
+Why:
 
-### 1. 克隆并安装
+- The bridge can auto-detect the Desktop/Web sidecar backend.
+- Project switching is reliable in that mode.
+- Scoped SSE events are available, so Telegram streaming works correctly.
+
+Fallback: point the bridge at a standalone `opencode serve` instance with `OPENCODE_SERVER_URL`.
+
+Important:
+
+- Basic chat still works against a raw `opencode serve` backend.
+- Project switching may be limited there, depending on how that backend was started and which OpenCode version you use.
+
+## Requirements
+
+- [Bun](https://bun.sh) 1.x
+- A local OpenCode installation
+- A Telegram bot token from [@BotFather](https://t.me/BotFather)
+- Your Telegram numeric user ID from [@userinfobot](https://t.me/userinfobot) or similar
+
+## Quick start
+
+### 1. Clone and install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/opencode-telegram-bridge.git
-cd opencode-telegram-bridge
+git clone <your-repo-url>
+cd opencode-via-telegram
 bun install
 ```
 
-### 2. 配置环境变量
+### 2. Create the environment file
 
 ```bash
 cp .env.example .env
 ```
 
-编辑 `.env`：
+Edit `.env` and set at least:
 
 ```env
-TELEGRAM_BOT_TOKEN="从 @BotFather 获取的 Token"
-ALLOWED_USER_ID="你的 Telegram 用户 ID（纯数字）"
-OPENCODE_SERVER_URL="http://127.0.0.1:4096"
+TELEGRAM_BOT_TOKEN="123456:your-bot-token"
+ALLOWED_USER_ID="123456789"
 ```
 
-- **`TELEGRAM_BOT_TOKEN`** — 在 [@BotFather](https://t.me/BotFather) 创建 Bot 后获得
-- **`ALLOWED_USER_ID`** — 在 [@userinfobot](https://t.me/userinfobot) 发送任意消息即可获取
-- **`OPENCODE_SERVER_URL`** — OpenCode 本地 HTTP 服务地址（默认端口 `4096`）
+### 3. Start an OpenCode backend
 
-### 3. 启动 OpenCode
+Choose one:
 
-确保 OpenCode 已在运行：
+#### Option A: OpenCode Desktop / Web
+
+Open OpenCode Desktop, or run:
+
+```bash
+opencode web
+```
+
+The bridge will auto-discover the local backend when possible.
+
+#### Option B: Standalone OpenCode server
 
 ```bash
 opencode serve --port 4096
 ```
 
-### 4. 启动 Bridge
+If you use this mode, keep `OPENCODE_SERVER_URL=http://127.0.0.1:4096` in `.env`.
+
+### 4. Start the bridge
 
 ```bash
-bun run index.ts
+bun run start
 ```
 
-打开 Telegram，找到你的 Bot，开始对话！
+Then open your bot in Telegram and send `/status`.
 
----
+If the bridge is connected correctly, `/status` should show the active backend, project, and session state.
 
-## 设为后台服务（macOS）
+## Environment variables
 
-推荐将 OpenCode 和 Bridge **都**配置为 launchd 服务，开机自动启动。
+Required:
 
-### 步骤一：OpenCode 后台服务
+| Variable | Description |
+| --- | --- |
+| `TELEGRAM_BOT_TOKEN` | Bot token from BotFather |
+| `ALLOWED_USER_ID` | Telegram user ID allowed to use the bot. Use `ALL` only for local debugging. |
+
+Optional backend settings:
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `OPENCODE_SERVER_URL` | `http://127.0.0.1:4096` | Fallback backend URL when Desktop/Web auto-discovery is unavailable |
+| `OPENCODE_SERVER_USERNAME` | `opencode` | Basic auth username for protected fallback servers |
+| `OPENCODE_SERVER_PASSWORD` | empty | Basic auth password for protected fallback servers |
+| `OPENCODE_BACKEND_CACHE_TTL_MS` | `5000` | Backend auto-discovery cache duration |
+| `OPENCODE_DESKTOP_SETTINGS_PATH` | platform default | Override Desktop settings file path for sidecar discovery |
+
+Optional runtime tuning:
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `OPENCODE_REQUEST_TIMEOUT_MS` | `8000` | Timeout for OpenCode HTTP requests |
+| `OPENCODE_RESPONSE_POLL_INTERVAL_MS` | `1000` | Poll interval for sidecar fallback response tracking |
+| `OPENCODE_RESPONSE_POLL_TIMEOUT_MS` | `180000` | Overall response timeout |
+| `OPENCODE_RESPONSE_POLL_MESSAGE_LIMIT` | `20` | Assistant message window size during poll fallback |
+
+## Telegram commands
+
+| Command | Description |
+| --- | --- |
+| `/new` | Reset the current Telegram-side session binding |
+| `/status` | Show backend, model, project, and session info |
+| `/stop` | Abort the current response |
+| `/plan` | Switch the current session to Plan mode |
+| `/build` | Switch the current session to Build mode |
+| `/undo` | Undo the last action |
+| `/redo` | Redo the last undone action |
+| `/share` | Share the current OpenCode session |
+| `/unshare` | Remove the current share link |
+| `/models` | Select a model/provider |
+| `/sessions` | List and switch sessions |
+| `/projects` | List and switch projects |
+| `/commands` | List and trigger custom OpenCode commands |
+
+Any non-command message is forwarded to OpenCode as a prompt. Attachments are downloaded locally and converted into OpenCode-compatible file parts.
+
+## Runtime files
+
+The bridge creates local runtime state files in the project directory:
+
+- `sessions-map.json`
+- `selected-models.json`
+- `active-projects.json`
+- `.telegram-bridge.lock`
+- `.cache/telegram-media/...`
+
+These are local runtime artifacts and should not be committed.
+
+## Development
+
+Run the bridge:
 
 ```bash
-# 查看 opencode 的安装路径
-which opencode
-
-# 复制示例 plist
-cp com.user.opencode.server.plist.example ~/Library/LaunchAgents/com.user.opencode.server.plist
+bun run start
 ```
 
-打开 `~/Library/LaunchAgents/com.user.opencode.server.plist`，把 `opencode` 二进制路径改为 `which opencode` 输出的实际路径，然后：
+Run tests:
 
 ```bash
-launchctl load ~/Library/LaunchAgents/com.user.opencode.server.plist
-launchctl start com.user.opencode.server
-
-# 验证是否正常运行
-curl http://127.0.0.1:4096/session
+bun test
 ```
 
-### 步骤二：Bridge 后台服务
+Run type checks:
+
+```bash
+bun run check
+```
+
+## macOS background services
+
+Example `launchd` files are included:
+
+- `com.user.opencode.server.plist.example`
+- `com.user.telegram.bridge.plist.example`
+
+Typical flow:
+
+1. Copy the example plist into `~/Library/LaunchAgents/`
+2. Replace paths and usernames with your local values
+3. Load it with `launchctl`
+
+Example:
 
 ```bash
 cp com.user.telegram.bridge.plist.example ~/Library/LaunchAgents/com.user.telegram.bridge.plist
-```
-
-打开该文件，将所有 `YOUR_USERNAME` 替换为你的 macOS 用户名，并将 `WorkingDirectory` 改为本仓库的完整路径，然后：
-
-```bash
 launchctl load ~/Library/LaunchAgents/com.user.telegram.bridge.plist
 launchctl start com.user.telegram.bridge
 ```
 
-### 常用命令
+## Troubleshooting
 
-```bash
-# 查看日志
-tail -f /tmp/opencode.log           # OpenCode 日志
-tail -f /tmp/telegram-bridge.log    # Bridge 日志
+### Telegram says nothing / no reply arrives
 
-# 重启 Bridge（修改配置后）
-launchctl stop com.user.telegram.bridge && launchctl start com.user.telegram.bridge
+- Make sure the bridge is running.
+- Make sure OpenCode is reachable.
+- Send `/status` first and confirm the backend is shown.
+- If only `/status` works but normal prompts do not, confirm your OpenCode backend is healthy and the selected project is valid.
 
-# 停止所有服务
-launchctl unload ~/Library/LaunchAgents/com.user.opencode.server.plist
-launchctl unload ~/Library/LaunchAgents/com.user.telegram.bridge.plist
-```
+### `409 Conflict` in logs
 
----
+Another process is already polling the same Telegram bot token.
 
-## Bot 命令
+Stop duplicate bridge instances, webhooks, or any other polling client using the same bot.
 
-| 命令 | 说明 |
-|---|---|
-| （任意消息） | 与 AI 对话 |
-| `/new` | 重置对话上下文 |
-| `/status` | 查看当前会话信息 |
+### Project switching appears wrong
 
----
+Check `/status` and confirm the backend source:
 
-## 项目结构
+- Best: `desktop-sidecar`
+- Acceptable: `desktop-default-url`
+- Limited fallback: `env @ http://127.0.0.1:4096`
 
-```
-opencode-telegram-bridge/
-├── index.ts                                    # 核心代码
-├── package.json
-├── bun.lock
-├── .env.example                                # 环境变量配置模板
-├── com.user.opencode.server.plist.example      # OpenCode 后台服务配置模板
-├── com.user.telegram.bridge.plist.example      # Bridge 后台服务配置模板
-└── .gitignore
-```
+If you are on the raw fallback server, project scoping may not behave like Desktop/Web sidecar mode.
 
----
+### Attachments fail
 
-## 工作原理
+Common causes:
 
-```
-Telegram ←→ Bot API ←→ Bridge（index.ts）←→ OpenCode HTTP API
-                               ↑
-                        SSE 事件流（实时 AI 输出）
-```
+- Telegram download size limit
+- unsupported media type
+- model-side media capability mismatch
+- OpenCode permission or tool errors
 
-1. 收到你在 Telegram 发送的消息
-2. 通过 REST API 转发给 OpenCode
-3. 订阅 OpenCode 的 SSE `/event` 流获取实时输出
-4. 实时编辑 Telegram 消息，逐步呈现 AI 回答
+Start with a small image or document and verify `/status` before testing bigger files.
 
----
+## Known limitations
 
-## 常见问题
+- Multi-question or multi-select `question` flows are shown in Telegram, but complex answering still falls back to the desktop client.
+- This bridge is optimized for a single trusted user, not a public multi-user bot.
+- The most reliable project-scoped behavior requires a Desktop/Web sidecar backend.
 
-**Bot 没有响应**
-- 检查 OpenCode 是否在运行：`curl http://127.0.0.1:4096/session`
-- 确认 `.env` 中的 Token 和 User ID 正确
-- 查看日志：`tail -f /tmp/telegram-bridge.log`
+## Changelog
 
-**日志中出现 "409 Conflict"**
-- 同一时间只能运行一个 Bridge 实例
-- 停止重复进程：`pkill -f "bun run index.ts"`
-
----
+See [CHANGELOG.md](./CHANGELOG.md).
 
 ## License
 

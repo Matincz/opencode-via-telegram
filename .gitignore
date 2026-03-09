@@ -1,9 +1,15 @@
 # Environment variables — DO NOT commit
 .env
+AGENTS.md
+docs/
 
 # Session state (auto-generated at runtime)
 sessions-map.json
 selected-models.json
+active-projects.json
+bot.pid
+.telegram-bridge.lock
+.perm-debug-test
 
 # Node / Bun
 node_modules/
@@ -15,12 +21,14 @@ event.log
 
 # Runtime caches
 .cache/
+.opencode/
 
 # Debug scripts
 debug*.ts
 debug*.js
 test-*.ts
 test-*.js
+test-session.ts
 
 # macOS
 .DS_Store
