@@ -623,7 +623,7 @@ export function createTelegramStreaming(context: TelegramStreamingContext) {
     const backend = await context.resolveOpencodeBackend().catch(() => null)
     const worktree = await context.getActiveProjectWorktree(chatId)
     const shouldUseScopedEventStream =
-      !!backend && backend.source !== "env" && !!worktree && !context.isOverlyBroadProjectWorktree(worktree)
+      !!backend && !!worktree && !context.isOverlyBroadProjectWorktree(worktree)
     const shouldPollResponse = !!backend && backend.source !== "env" && !shouldUseScopedEventStream
     const knownAssistantMessageIds = shouldPollResponse
       ? await captureKnownAssistantMessageIds(chatId, sessionId)
@@ -678,7 +678,7 @@ export function createTelegramStreaming(context: TelegramStreamingContext) {
     const backend = await context.resolveOpencodeBackend().catch(() => null)
     const worktree = await context.getActiveProjectWorktree(chatId)
     const shouldUseScopedEventStream =
-      !!backend && backend.source !== "env" && !!worktree && !context.isOverlyBroadProjectWorktree(worktree)
+      !!backend && !!worktree && !context.isOverlyBroadProjectWorktree(worktree)
     const shouldPollResponse = !!backend && backend.source !== "env" && !shouldUseScopedEventStream
     const knownAssistantMessageIds = shouldPollResponse
       ? await captureKnownAssistantMessageIds(chatId, sessionId)

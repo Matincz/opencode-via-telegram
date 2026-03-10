@@ -57,7 +57,7 @@ export function createProjectSessionManager(context: ProjectSessionManagerContex
     if (!worktree || isOverlyBroadProjectWorktree(worktree)) return {}
 
     const backend = await context.resolveOpencodeBackend().catch(() => null)
-    if (!backend || backend.source === "env") return {}
+    if (!backend) return {}
 
     return { "x-opencode-directory": worktree }
   }

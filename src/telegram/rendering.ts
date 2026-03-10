@@ -38,13 +38,13 @@ export function markdownToTelegramHtml(md: string): string {
 
 export function createDraftSender(tgApiBase: string) {
   return async function sendDraft(chatId: number, draftId: number, text: string) {
-    const payloadText = text.trim().length === 0 ? "\u200b" : text
+    if (text.trim().length === 0) return
 
     try {
       const res = await fetch(`${tgApiBase}/sendMessageDraft`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: chatId, draft_id: draftId, text: payloadText }),
+        body: JSON.stringify({ chat_id: chatId, draft_id: draftId, text }),
       })
       if (!res.ok) {
         const body = await res.text()
