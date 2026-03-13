@@ -8,6 +8,13 @@ export interface OpenCodeBackend {
   source: "desktop-sidecar" | "desktop-default-url" | "env"
 }
 
+export interface OpenCodeProjectLike {
+  id: string
+  worktree?: string
+  vcs?: string
+  source?: "backend" | "desktop-local"
+}
+
 const DEFAULT_OPENCODE_URL = process.env.OPENCODE_SERVER_URL || "http://127.0.0.1:4096"
 const DEFAULT_OPENCODE_USERNAME = process.env.OPENCODE_SERVER_USERNAME || "opencode"
 const DEFAULT_OPENCODE_PASSWORD = process.env.OPENCODE_SERVER_PASSWORD
@@ -103,6 +110,14 @@ export function getDesktopSettingsPath(homeDir = os.homedir(), platform = proces
   return path.join(xdgDataHome, "ai.opencode.desktop", "opencode.settings.dat")
 }
 
+export function getDesktopStateDir(homeDir = os.homedir(), platform = process.platform) {
+  return path.dirname(getDesktopSettingsPath(homeDir, platform))
+}
+
+export function getDesktopGlobalStatePath(homeDir = os.homedir(), platform = process.platform) {
+  return path.join(getDesktopStateDir(homeDir, platform), "opencode.global.dat")
+}
+
 export function parseDesktopSettingsServerUrl(raw: string): string | undefined {
   try {
     const parsed = JSON.parse(raw)
@@ -112,6 +127,72 @@ export function parseDesktopSettingsServerUrl(raw: string): string | undefined {
   } catch {
     return undefined
   }
+}
+
+export function parseDesktopLocalProjects(raw: string): OpenCodeProjectLike[] {
+  try {
+    const parsed = JSON.parse(raw)
+    const serverRaw = parsed?.server
+    if (typeof serverRaw !== "string") return []
+
+    const serverState = JSON.parse(serverRaw)
+    const localProjects = Array.isArray(serverState?.projects?.local) ? serverState.projects.local : []
+
+    return localProjects
+      .map((project: any) => {
+        const worktree = typeof project?.worktree === "string" ? project.worktree.trim() : ""
+        if (!worktree) return null
+
+        return {
+          id: worktree,
+          worktree,
+          vcs: typeof project?.vcs === "string" ? project.vcs : undefined,
+          source: "desktop-local" as const,
+        }
+      })
+      .filter(Boolean) as OpenCodeProjectLike[]
+  } catch {
+    return []
+  }
+}
+
+export function readDesktopLocalProjects(homeDir = os.homedir(), platform = process.platform): OpenCodeProjectLike[] {
+  const globalStatePath = getDesktopGlobalStatePath(homeDir, platform)
+  if (!fs.existsSync(globalStatePath)) return []
+
+  return parseDesktopLocalProjects(fs.readFileSync(globalStatePath, "utf-8"))
+}
+
+export function mergeProjectLists(
+  backendProjects: OpenCodeProjectLike[],
+  desktopProjects: OpenCodeProjectLike[],
+): OpenCodeProjectLike[] {
+  const merged: OpenCodeProjectLike[] = []
+  const seenIds = new Set<string>()
+  const seenWorktrees = new Set<string>()
+
+  for (const project of backendProjects) {
+    if (!project?.id) continue
+    merged.push({ ...project, source: project.source || "backend" })
+    seenIds.add(project.id)
+    if (typeof project.worktree === "string" && project.worktree.trim()) {
+      seenWorktrees.add(path.resolve(project.worktree))
+    }
+  }
+
+  for (const project of desktopProjects) {
+    const worktree = typeof project?.worktree === "string" ? project.worktree.trim() : ""
+    if (!project?.id || !worktree) continue
+
+    const resolvedWorktree = path.resolve(worktree)
+    if (seenIds.has(project.id) || seenWorktrees.has(resolvedWorktree)) continue
+
+    merged.push({ ...project, worktree, source: "desktop-local" })
+    seenIds.add(project.id)
+    seenWorktrees.add(resolvedWorktree)
+  }
+
+  return merged
 }
 
 function readDesktopSettingsBackend(): OpenCodeBackend | null {

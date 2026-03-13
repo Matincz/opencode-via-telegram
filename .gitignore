@@ -6,6 +6,7 @@ docs/
 # Session state (auto-generated at runtime)
 sessions-map.json
 selected-models.json
+selected-agents.json
 active-projects.json
 bot.pid
 .telegram-bridge.lock

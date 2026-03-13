@@ -41,6 +41,7 @@ export async function sendSessionPromptAsync(input: {
   baseUrl?: string
   sessionId: string
   model?: ModelRef
+  agent?: string
   parts: PromptPartInput[]
   headers?: HeadersInit
 }) {
@@ -52,6 +53,7 @@ export async function sendSessionPromptAsync(input: {
     headers: { "Content-Type": "application/json", ...(input.headers || {}) },
     body: JSON.stringify({
       model: input.model,
+      agent: input.agent,
       parts: input.parts,
     }),
     },
@@ -63,6 +65,7 @@ export async function sendSessionCommand(input: {
   baseUrl?: string
   sessionId: string
   model?: ModelRef
+  agent?: string
   command: string
   arguments: string
   parts?: FilePartInput[]
@@ -75,6 +78,7 @@ export async function sendSessionCommand(input: {
     method: "POST",
     headers: { "Content-Type": "application/json", ...(input.headers || {}) },
     body: JSON.stringify({
+      agent: input.agent,
       model: input.model ? `${input.model.providerID}/${input.model.modelID}` : undefined,
       command: input.command,
       arguments: input.arguments,

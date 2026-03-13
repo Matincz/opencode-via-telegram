@@ -59,6 +59,7 @@ export interface TelegramStreamingContext {
   isOverlyBroadProjectWorktree: (worktree?: string) => boolean
   resolveInboundAttachments: (normalized: NormalizedInboundMessage) => Promise<ResolvedTelegramAttachment[]>
   scheduleAttachmentCleanup: (paths: string[], delayMs?: number) => void
+  resolveSelectedAgent: (chatId: number) => string | undefined
   resolveSelectedModel: (chatId: number) => ModelRef | undefined
   resolveEffectiveModelInfo: (chatId: number) => Promise<any>
   sendPermissionRequestPrompt: (chatId: number, perm: any) => Promise<void>
@@ -576,20 +577,18 @@ export function createTelegramStreaming(context: TelegramStreamingContext) {
         console.log(`[BUBBLE] 渲染气泡 id=${bubbleId} partType="${bubble.partType}" textLen=${bubble.text.length}`)
         let lastDraftTime = 0
         const startWait = Date.now()
-        const maxWait = 30000
+        const maxWait = bubble.partType === "reasoning" ? 8000 : 30000
 
         while (!bubble.done) {
           const now = Date.now()
           if (now - startWait > maxWait && bubble.text.trim() === "") {
-            console.log(`[BUBBLE] 超时跳过空气泡 id=${bubbleId}`)
             break
           }
           if (now - startWait > maxWait) {
-            console.log(`[BUBBLE] 超时强制完成 id=${bubbleId}`)
             bubble.done = true
             break
           }
-          if (bubble.text !== bubble.lastDraftText && now - lastDraftTime > 250) {
+          if (bubble.text.trim() && bubble.text !== bubble.lastDraftText && now - lastDraftTime > 250) {
             bubble.lastDraftText = bubble.text
             lastDraftTime = now
             const prefix = bubble.partType === "reasoning" ? "🤔 思考中...\n\n" : ""
@@ -623,7 +622,7 @@ export function createTelegramStreaming(context: TelegramStreamingContext) {
     const backend = await context.resolveOpencodeBackend().catch(() => null)
     const worktree = await context.getActiveProjectWorktree(chatId)
     const shouldUseScopedEventStream =
-      !!backend && backend.source !== "env" && !!worktree && !context.isOverlyBroadProjectWorktree(worktree)
+      !!backend && backend.source !== "env" && !!worktree
     const shouldPollResponse = !!backend && backend.source !== "env" && !shouldUseScopedEventStream
     const knownAssistantMessageIds = shouldPollResponse
       ? await captureKnownAssistantMessageIds(chatId, sessionId)
@@ -649,6 +648,7 @@ export function createTelegramStreaming(context: TelegramStreamingContext) {
 
       await sendSessionPromptAsync({
         sessionId,
+        agent: context.resolveSelectedAgent(chatId),
         model: context.resolveSelectedModel(chatId),
         parts,
         headers: await context.buildProjectScopedHeaders({ chatId }),
@@ -678,7 +678,7 @@ export function createTelegramStreaming(context: TelegramStreamingContext) {
     const backend = await context.resolveOpencodeBackend().catch(() => null)
     const worktree = await context.getActiveProjectWorktree(chatId)
     const shouldUseScopedEventStream =
-      !!backend && backend.source !== "env" && !!worktree && !context.isOverlyBroadProjectWorktree(worktree)
+      !!backend && backend.source !== "env" && !!worktree
     const shouldPollResponse = !!backend && backend.source !== "env" && !shouldUseScopedEventStream
     const knownAssistantMessageIds = shouldPollResponse
       ? await captureKnownAssistantMessageIds(chatId, sessionId)
@@ -699,6 +699,7 @@ export function createTelegramStreaming(context: TelegramStreamingContext) {
       attachments = await context.resolveInboundAttachments(normalized)
       await sendSessionCommand({
         sessionId,
+        agent: context.resolveSelectedAgent(chatId),
         model: context.resolveSelectedModel(chatId),
         command,
         arguments: args,

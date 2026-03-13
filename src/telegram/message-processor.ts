@@ -1,3 +1,4 @@
+import * as path from "path"
 import TelegramBot from "node-telegram-bot-api"
 import {
   activeProjectMap,
@@ -5,7 +6,9 @@ import {
   clearChatSession,
   clearQuestionState,
   isOverlyBroadProjectWorktree,
+  saveSelectedAgents,
   saveSessions,
+  selectedAgentMap,
   selectedModelMap,
   sessionMap,
 } from "../store/runtime-state"
@@ -26,13 +29,15 @@ interface StreamingController {
 interface SessionManager {
   buildProjectScopedHeaders: (input?: { chatId?: number; worktree?: string }) => Promise<HeadersInit>
   getProjectDisplayName: (worktree: string) => string
-  runBuiltinCommand: (chatId: number, command: string, args?: string) => Promise<any>
+  revertLastUserMessage: (chatId: number) => Promise<any>
+  unrevertSession: (chatId: number) => Promise<any>
 }
 
 export interface TelegramMessageProcessorContext {
   bot: TelegramBot
   streaming: StreamingController
   sessionManager: SessionManager
+  listProjects: () => Promise<any[]>
   resolveOpencodeBackend: (input?: { forceRefresh?: boolean }) => Promise<{ source: string; baseUrl: string }>
   opencodeGet: (path: string, chatId?: number, scoped?: boolean) => Promise<any>
   opencodePost: (path: string, body?: any, chatId?: number, scoped?: boolean) => Promise<any>
@@ -125,38 +130,22 @@ export function createTelegramMessageProcessor(context: TelegramMessageProcessor
     }
 
     if (cmd === "/plan") {
-      const sessionId = sessionMap.get(chatId)
-      if (!sessionId) {
-        await context.bot.sendMessage(chatId, "📭 请先发送消息建立会话，再切换模式。")
-        return
-      }
-      try {
-        await context.sessionManager.runBuiltinCommand(chatId, "/mode", "plan")
-        await context.bot.sendMessage(
-          chatId,
-          "🗺️ 已切换到 <b>Plan</b> 模式。\n只分析代码，不修改文件。\n使用 /build 切回默认模式。",
-          { parse_mode: "HTML" },
-        )
-      } catch {
-        await context.bot.sendMessage(chatId, "⚠️ 模式切换失败，请确认当前有活跃会话。")
-      }
+      selectedAgentMap.set(chatId, "plan")
+      saveSelectedAgents()
+      await context.bot.sendMessage(
+        chatId,
+        "🗺️ 已切换到 <b>Plan</b> 模式。\n下一条消息起只分析代码，不修改文件。\n使用 /build 切回默认模式。",
+        { parse_mode: "HTML" },
+      )
       return
     }
 
     if (cmd === "/build") {
-      const sessionId = sessionMap.get(chatId)
-      if (!sessionId) {
-        await context.bot.sendMessage(chatId, "📭 请先发送消息建立会话，再切换模式。")
-        return
-      }
-      try {
-        await context.sessionManager.runBuiltinCommand(chatId, "/mode", "build")
-        await context.bot.sendMessage(chatId, "🔨 已切换到 <b>Build</b> 模式（默认，全工具开放）。", {
-          parse_mode: "HTML",
-        })
-      } catch {
-        await context.bot.sendMessage(chatId, "⚠️ 模式切换失败。")
-      }
+      selectedAgentMap.set(chatId, "build")
+      saveSelectedAgents()
+      await context.bot.sendMessage(chatId, "🔨 已切换到 <b>Build</b> 模式。\n下一条消息起恢复默认开发模式。", {
+        parse_mode: "HTML",
+      })
       return
     }
 
@@ -166,7 +155,7 @@ export function createTelegramMessageProcessor(context: TelegramMessageProcessor
         return
       }
       try {
-        await context.sessionManager.runBuiltinCommand(chatId, "/undo")
+        await context.sessionManager.revertLastUserMessage(chatId)
         await context.bot.sendMessage(chatId, "↩️ 已撤销上一次操作。")
       } catch {
         await context.bot.sendMessage(chatId, "⚠️ 撤销失败。")
@@ -180,7 +169,7 @@ export function createTelegramMessageProcessor(context: TelegramMessageProcessor
         return
       }
       try {
-        await context.sessionManager.runBuiltinCommand(chatId, "/redo")
+        await context.sessionManager.unrevertSession(chatId)
         await context.bot.sendMessage(chatId, "↪️ 已重做操作。")
       } catch {
         await context.bot.sendMessage(chatId, "⚠️ 重做失败。")
@@ -259,6 +248,9 @@ export function createTelegramMessageProcessor(context: TelegramMessageProcessor
         ])
 
         const model = selectedModelMap.get(chatId) || cfgData?.model || "未知"
+        const agent = selectedAgentMap.get(chatId) || (Array.isArray(messages)
+          ? [...messages].reverse().find((msg: any) => typeof msg?.info?.agent === "string")?.info?.agent
+          : undefined) || "build"
         const project = projData?.worktree || projData?.path || projData?.name || "未知"
         const sessionTitle = sessionDetail?.title || "未命名"
         let totalTokens = 0
@@ -289,6 +281,7 @@ export function createTelegramMessageProcessor(context: TelegramMessageProcessor
           `📊 <b>OpenCode 状态</b>`,
           ``,
           `🤖 <b>模型：</b><code>${context.escapeHtml(model)}</code>`,
+          `🧭 <b>模式：</b><code>${context.escapeHtml(agent)}</code>`,
           `📁 <b>项目：</b><code>${context.escapeHtml(project)}</code>`,
           `💬 <b>会话：</b><code>${context.escapeHtml(sessionTitle)}</code>`,
           `🔑 <b>ID：</b><code>${sessionId || "无"}</code>`,
@@ -376,7 +369,7 @@ export function createTelegramMessageProcessor(context: TelegramMessageProcessor
       try {
         const [allSessions, allProjects] = await Promise.all([
           context.opencodeGet("/session", chatId, true),
-          context.opencodeGet("/project").catch(() => [] as any[]),
+          context.listProjects().catch(() => [] as any[]),
         ])
 
         const explicitProjectId = activeProjectMap.get(chatId)
@@ -385,12 +378,24 @@ export function createTelegramMessageProcessor(context: TelegramMessageProcessor
         const activeProject = Array.isArray(allProjects)
           ? allProjects.find((project: any) => project.id === activeProjectId)
           : null
-        const projectHint = activeProject?.worktree
-          ? `📁 <b>当前项目：</b><code>${context.escapeHtml(context.sessionManager.getProjectDisplayName(activeProject.worktree))}</code>  (用 /projects 切换)`
+        const activeProjectWorktree = explicitProjectId
+          ? activeProject?.worktree || explicitProjectId
+          : typeof currentOcProject?.worktree === "string"
+            ? currentOcProject.worktree
+            : undefined
+        const projectHint = activeProjectWorktree
+          ? `📁 <b>当前项目：</b><code>${context.escapeHtml(context.sessionManager.getProjectDisplayName(activeProjectWorktree))}</code>  (用 /projects 切换)`
           : `(用 /projects 切换项目)`
 
         const sessions: any[] = Array.isArray(allSessions) ? allSessions : []
-        const filtered = activeProjectId ? sessions.filter((session: any) => session.projectID === activeProjectId) : sessions
+        const filtered = activeProjectWorktree
+          ? sessions.filter((session: any) =>
+            typeof session?.directory === "string" &&
+            path.resolve(session.directory) === path.resolve(activeProjectWorktree)
+          )
+          : activeProjectId
+            ? sessions.filter((session: any) => session.projectID === activeProjectId)
+            : sessions
 
         if (!filtered.length) {
           await context.bot.sendMessage(
@@ -429,7 +434,7 @@ export function createTelegramMessageProcessor(context: TelegramMessageProcessor
 
     if (cmd === "/projects") {
       try {
-        const projects: any[] = await context.opencodeGet("/project")
+        const projects: any[] = await context.listProjects()
         if (!projects.length) {
           await context.bot.sendMessage(chatId, "💭 没有可用的项目。")
           return
@@ -438,12 +443,16 @@ export function createTelegramMessageProcessor(context: TelegramMessageProcessor
         const explicitProjectId = activeProjectMap.get(chatId)
         const currentOcProject = await context.opencodeGet("/project/current", chatId, true).catch(() => null)
         const activeProjectId = explicitProjectId || currentOcProject?.id
-        const keyboard: any[][] = [[{ text: "🌐 打开当前 OpenCode 项目", callback_data: context.createCallbackToken("project", "__current__") }]]
-        let hiddenBroadProjects = 0
+        const followingCurrentProject = !explicitProjectId
+        const keyboard: any[][] = [[{
+          text: `${followingCurrentProject ? "✅ " : ""}🌐 跟随当前 OpenCode 项目`,
+          callback_data: context.createCallbackToken("project", "__current__"),
+        }]]
+        let hiddenProjects = 0
 
         for (const project of projects.slice(0, 20)) {
           if (project.id === "global" || isOverlyBroadProjectWorktree(project.worktree)) {
-            hiddenBroadProjects++
+            hiddenProjects++
             continue
           }
 
@@ -456,29 +465,33 @@ export function createTelegramMessageProcessor(context: TelegramMessageProcessor
           }])
         }
 
-        const currentProjDisplay = activeProjectId
+        const currentProjDisplay = explicitProjectId
           ? context.sessionManager.getProjectDisplayName(
-            projects.find((project: any) => project.id === activeProjectId)?.worktree || activeProjectId,
+            projects.find((project: any) => project.id === explicitProjectId)?.worktree || explicitProjectId,
           )
+          : typeof currentOcProject?.worktree === "string"
+            ? context.sessionManager.getProjectDisplayName(currentOcProject.worktree)
           : "（跟随后端默认目录）"
 
-        await context.bot.sendMessage(
-          chatId,
-          [
+        const projectsText = [
             `📁 <b>选择项目</b>`,
             `当前 Telegram 项目: <code>${context.escapeHtml(currentProjDisplay)}</code>`,
             ``,
+            `上方按钮会直接跟随当前 OpenCode Desktop / Web 里打开的项目。`,
             `切换项目后会重置当前会话；下一条消息会在新项目下创建或继续会话。`,
-            hiddenBroadProjects > 0 ? `已隐藏 ${hiddenBroadProjects} 个范围过大的项目。` : ``,
+            hiddenProjects > 0 ? `已隐藏 ${hiddenProjects} 个不适合作为显式目标的项目。` : ``,
             `新增项目将自动出现在此列表中。`,
-          ].filter(Boolean).join("\n"),
+          ].filter(Boolean).join("\n")
+        await context.bot.sendMessage(
+          chatId,
+          projectsText,
           {
             parse_mode: "HTML",
             reply_markup: { inline_keyboard: keyboard },
           } as any,
         )
       } catch (error: any) {
-        console.error("[/projects ERROR]", error.message)
+        console.error("[/projects ERROR]", error?.message, error?.stack)
         await context.bot.sendMessage(chatId, "⚠️ 获取项目列表失败。")
       }
       return

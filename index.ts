@@ -1,15 +1,17 @@
 import TelegramBot from "node-telegram-bot-api"
 import { config } from "dotenv"
 import * as path from "path"
-import { fetchOpencodePath, resolveOpencodeBackend } from "./src/opencode/backend"
+import { fetchOpencodePath, mergeProjectLists, readDesktopLocalProjects, resolveOpencodeBackend } from "./src/opencode/backend"
 import { buildSelectableProviders, loadLocalProviderState } from "./src/opencode/model-catalog"
 import { createProjectSessionManager, getProjectDisplayName } from "./src/opencode/project-session"
 import { acquireSingleInstanceLock, SingleInstanceLockError } from "./src/runtime/single-instance"
 import {
   isOverlyBroadProjectWorktree,
   loadActiveProjects,
+  loadSelectedAgents,
   loadSelectedModels,
   loadSessions,
+  selectedAgentMap,
   selectedModelMap,
 } from "./src/store/runtime-state"
 import { shouldUseMediaGroupBuffer } from "./src/telegram/inbound"
@@ -150,10 +152,10 @@ function parseModelRef(model: string): { providerID: string; modelID: string } |
 let streaming!: ReturnType<typeof createTelegramStreaming>
 
 const sessionManagerBase = createProjectSessionManager({
+  listProjects,
   resolveOpencodeBackend,
   opencodeGet,
   opencodePost,
-  parseModelRef,
   disposeChatState: (chatId) => streaming.disposeChatState(chatId),
 })
 
@@ -162,6 +164,20 @@ buildProjectScopedHeaders = sessionManagerBase.buildProjectScopedHeaders
 const sessionManager = {
   ...sessionManagerBase,
   getProjectDisplayName,
+}
+
+async function listProjects() {
+  const backendProjects = await opencodeGet("/project").catch(() => [] as any[])
+  const backend = await resolveOpencodeBackend().catch(() => null)
+
+  if (!backend || backend.source === "env") {
+    return Array.isArray(backendProjects) ? backendProjects : []
+  }
+
+  return mergeProjectLists(
+    Array.isArray(backendProjects) ? backendProjects : [],
+    readDesktopLocalProjects(),
+  )
 }
 
 async function getModelMenuContext(chatId: number): Promise<{ providers: any[]; currentModel: string }> {
@@ -189,6 +205,7 @@ async function getModelMenuContext(chatId: number): Promise<{ providers: any[]; 
 
 loadSessions()
 loadSelectedModels()
+loadSelectedAgents()
 loadActiveProjects()
 
 const mediaCacheRoot = getMediaCacheRoot(process.cwd())
@@ -249,6 +266,7 @@ streaming = createTelegramStreaming({
   isOverlyBroadProjectWorktree,
   resolveInboundAttachments,
   scheduleAttachmentCleanup,
+  resolveSelectedAgent: (chatId) => selectedAgentMap.get(chatId),
   resolveSelectedModel,
   resolveEffectiveModelInfo,
   sendPermissionRequestPrompt: (chatId, perm) => interactiveRequests.sendPermissionRequestPrompt(chatId, perm),
@@ -270,6 +288,7 @@ const processTelegramMessages = createTelegramMessageProcessor({
   bot,
   streaming,
   sessionManager,
+  listProjects,
   resolveOpencodeBackend,
   opencodeGet,
   opencodePost,
@@ -311,6 +330,7 @@ bot.on("callback_query", async (query: any) => {
     callbackPayloadMap,
     permRequestMap,
     questionActionMap,
+    listProjects,
     buildProjectScopedHeaders: ({ chatId }) => buildProjectScopedHeaders({ chatId }),
     fetchWithOpencodeTimeout,
     replyToQuestion: interactiveRequests.replyToQuestion,
@@ -326,7 +346,6 @@ bot.on("callback_query", async (query: any) => {
     getModelMenuContext,
     getProviderDisplayName,
     createCallbackToken,
-    parseModelRef,
   })
 })
 
@@ -345,9 +364,12 @@ bot.on("message", async (rawMsg: any) => {
     try {
       await processTelegramMessages(messages)
     } catch (error) {
+      console.error(`[TG_ERROR] chat=${chatId} error=`, error)
       streaming.clearResponseTracking(chatId)
       streaming.stopTypingIndicator(chatId)
-      await bot.sendMessage(chatId, `⚠️ 错误: ${formatUserFacingError(error)}`).catch(() => { })
+      await bot.sendMessage(chatId, `⚠️ 错误: ${formatUserFacingError(error)}`).catch((sendErr) => {
+        console.error(`[TG_SEND_FAIL] chat=${chatId} sendError=`, sendErr)
+      })
     }
   }
 

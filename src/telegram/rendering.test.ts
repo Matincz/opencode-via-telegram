@@ -1,5 +1,11 @@
-import { describe, expect, it } from "bun:test"
-import { buildSessionErrorNotice, escapeHtml, markdownToTelegramHtml } from "./rendering"
+import { afterEach, describe, expect, it } from "bun:test"
+import { buildSessionErrorNotice, createDraftSender, escapeHtml, markdownToTelegramHtml } from "./rendering"
+
+const originalFetch = globalThis.fetch
+
+afterEach(() => {
+  globalThis.fetch = originalFetch
+})
 
 describe("escapeHtml", () => {
   it("escapes reserved HTML characters", () => {
@@ -19,5 +25,24 @@ describe("buildSessionErrorNotice", () => {
   it("adds a /new hint for unsupported mixed media sessions", () => {
     const notice = buildSessionErrorNotice("AI_UnsupportedFunctionalityError: file part media type")
     expect(notice).toContain("发送 /new 新建会话后再试")
+  })
+})
+
+describe("createDraftSender", () => {
+  it("sends a zero-width space when clearing a draft", async () => {
+    let payload: any = null
+    globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+      payload = JSON.parse(String(init?.body || "{}"))
+      return new Response("ok")
+    }) as typeof fetch
+
+    const sendDraft = createDraftSender("https://example.test")
+    await sendDraft(1, 2, "")
+
+    expect(payload).toEqual({
+      chat_id: 1,
+      draft_id: 2,
+      text: "\u200b",
+    })
   })
 })

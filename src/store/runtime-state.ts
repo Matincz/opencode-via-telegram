@@ -5,11 +5,13 @@ import * as path from "path"
 const HOME_DIR = path.resolve(os.homedir())
 const SESSIONS_FILE = path.join(process.cwd(), "sessions-map.json")
 const SELECTED_MODELS_FILE = path.join(process.cwd(), "selected-models.json")
+const SELECTED_AGENTS_FILE = path.join(process.cwd(), "selected-agents.json")
 const ACTIVE_PROJECTS_FILE = path.join(process.cwd(), "active-projects.json")
 
 export const sessionMap = new Map<number, string>()
 const sessionChatMap = new Map<string, number>()
 export const selectedModelMap = new Map<number, string>()
+export const selectedAgentMap = new Map<number, string>()
 export const activeProjectMap = new Map<number, string>()
 const activeProjectWorktreeCache = new Map<number, string>()
 export const pendingQuestionRequests = new Map<
@@ -89,6 +91,31 @@ export function saveSelectedModels() {
     fs.writeFileSync(SELECTED_MODELS_FILE, JSON.stringify(obj, null, 2), "utf-8")
   } catch (err) {
     console.error("保存模型选择记录失败:", err)
+  }
+}
+
+export function loadSelectedAgents() {
+  try {
+    if (!fs.existsSync(SELECTED_AGENTS_FILE)) return
+    const parsed = JSON.parse(fs.readFileSync(SELECTED_AGENTS_FILE, "utf-8"))
+    for (const key of Object.keys(parsed)) {
+      if (typeof parsed[key] === "string" && parsed[key].trim()) {
+        selectedAgentMap.set(Number(key), parsed[key].trim())
+      }
+    }
+    console.log(`🧭 已从本地加载了 ${selectedAgentMap.size} 个模式选择记录。`)
+  } catch (err) {
+    console.error("加载模式选择记录失败:", err)
+  }
+}
+
+export function saveSelectedAgents() {
+  try {
+    const obj: Record<string, string> = {}
+    for (const [key, value] of Array.from(selectedAgentMap.entries())) obj[String(key)] = value
+    fs.writeFileSync(SELECTED_AGENTS_FILE, JSON.stringify(obj, null, 2), "utf-8")
+  } catch (err) {
+    console.error("保存模式选择记录失败:", err)
   }
 }
 

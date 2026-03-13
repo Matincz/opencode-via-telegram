@@ -7,6 +7,7 @@ import {
   clearChatSession,
   pendingQuestionRequests,
   saveSelectedModels,
+  selectedAgentMap,
   saveSessions,
   selectedModelMap,
   sessionMap,
@@ -22,6 +23,7 @@ export interface TelegramCallbackQueryContext {
   callbackPayloadMap: CallbackPayloadMap
   permRequestMap: PermissionRequestMap
   questionActionMap: QuestionActionMap
+  listProjects: () => Promise<any[]>
   buildProjectScopedHeaders: (input: { chatId: number }) => Promise<HeadersInit>
   fetchWithOpencodeTimeout: (path: string, init: RequestInit) => Promise<Response>
   replyToQuestion: (chatId: number, requestId: string, answers: string[][]) => Promise<void>
@@ -37,7 +39,6 @@ export interface TelegramCallbackQueryContext {
   getModelMenuContext: (chatId: number) => Promise<{ providers: any[]; currentModel: string }>
   getProviderDisplayName: (provider: any) => string
   createCallbackToken: (type: string, value: string) => string
-  parseModelRef: (model: string) => { providerID: string; modelID: string } | undefined
 }
 
 async function answer(bot: TelegramBot, queryId: string, text?: string) {
@@ -226,7 +227,7 @@ export async function handleTelegramCallbackQuery(
     }
 
     const newProjectId = payload.value
-    const projects: any[] = await context.opencodeGet("/project").catch(() => [])
+    const projects: any[] = await context.listProjects().catch(() => [])
     const nextProject = newProjectId === "__current__" ? undefined : projects.find((p: any) => p.id === newProjectId)
 
     if (
@@ -243,7 +244,7 @@ export async function handleTelegramCallbackQuery(
       context.disposeChatState(chatId)
       clearChatSession(chatId)
       saveSessions()
-      confirmText = "♻️ 已清除 Telegram 项目选择。\n下一条消息将跟随后端默认目录重新创建会话。"
+      confirmText = "♻️ 已清除 Telegram 项目选择。\n下一条消息将跟随当前 OpenCode 项目重新创建会话。"
     } else {
       const worktree = nextProject?.worktree || newProjectId
       setActiveProjectSelection(chatId, newProjectId, worktree)
@@ -392,7 +393,8 @@ export async function handleTelegramCallbackQuery(
       await context.opencodePost(
         `/session/${sessionId}/command`,
         {
-          model: selectedModel ? context.parseModelRef(selectedModel) : undefined,
+          agent: selectedAgentMap.get(chatId),
+          model: selectedModel,
           command: `/${cmdName}`,
           arguments: "",
         },

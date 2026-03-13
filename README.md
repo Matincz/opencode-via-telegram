@@ -163,6 +163,7 @@ The bridge creates local runtime state files in the project directory:
 
 - `sessions-map.json`
 - `selected-models.json`
+- `selected-agents.json`
 - `active-projects.json`
 - `.telegram-bridge.lock`
 - `.cache/telegram-media/...`

@@ -9,7 +9,7 @@ afterEach(() => {
 })
 
 describe("sendSessionPromptAsync", () => {
-  it("posts prompt_async with model and parts", async () => {
+  it("posts prompt_async with model, agent, and parts", async () => {
     const fetchMock = mock(async (url: string, init?: RequestInit) => {
       expect(url).toBe("http://127.0.0.1:4096/session/ses_1/prompt_async")
       expect(init?.method).toBe("POST")
@@ -18,6 +18,7 @@ describe("sendSessionPromptAsync", () => {
       const body = JSON.parse(String(init?.body))
       expect(body).toEqual({
         model: { providerID: "openai", modelID: "gpt-5.4" },
+        agent: "plan",
         parts: [{ type: "text", text: "hello" }],
       })
 
@@ -30,16 +31,18 @@ describe("sendSessionPromptAsync", () => {
       baseUrl: "http://127.0.0.1:4096",
       sessionId: "ses_1",
       model: { providerID: "openai", modelID: "gpt-5.4" },
+      agent: "plan",
       parts: [{ type: "text", text: "hello" }],
     })
   })
 })
 
 describe("sendSessionCommand", () => {
-  it("posts command body with file parts", async () => {
+  it("posts command body with agent and file parts", async () => {
     const fetchMock = mock(async (_url: string, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body))
       expect(body).toEqual({
+        agent: "build",
         model: "openai/gpt-5.4",
         command: "/image",
         arguments: "describe",
@@ -64,6 +67,7 @@ describe("sendSessionCommand", () => {
     const result = await sendSessionCommand({
       baseUrl: "http://127.0.0.1:4096",
       sessionId: "ses_1",
+      agent: "build",
       model: { providerID: "openai", modelID: "gpt-5.4" },
       command: "/image",
       arguments: "describe",
