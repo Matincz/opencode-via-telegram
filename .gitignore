@@ -1,0 +1,44 @@
+**/node_modules/
+**/.DS_Store
+
+# Local tool state
+.claude/
+**/.claude/
+
+# Environment files
+**/.env
+**/.env.*
+!**/.env.example
+
+# Logs and runtime output
+**/*.log
+**/logs/
+**/output_to_user/
+**/cron-tasks/*/runs/
+
+# Local runtime/state files
+**/.cache/
+**/.runtime/
+**/.opencode/
+**/.gemini-cli-home/
+**/.gemini/
+**/.telegram-bridge.lock
+**/*.pid
+**/sessions-map.json
+**/selected-models.json
+**/selected-efforts.json
+**/selected-reasoning-efforts.json
+**/selected-agents.json
+**/active-projects.json
+**/chat-working-directories.json
+**/chat-permission-modes.json
+**/chat-workspace-history.json
+**/session-history.json
+**/chat-histories.json
+**/cron-jobs.json
+**/execution-approval-modes.json
+**/approval-runtime.json
+**/tool-approval-preferences.json
+**/checkpoints.json
+**/plan-artifacts.json
+**/rewind-snapshots.json

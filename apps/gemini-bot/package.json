@@ -1,0 +1,22 @@
+{
+  "name": "gemini-cli-via-telegram",
+  "version": "0.1.0",
+  "description": "Telegram bridge for Gemini CLI using bun",
+  "main": "index.ts",
+  "type": "module",
+  "scripts": {
+    "start": "bun run index.ts",
+    "test": "bun test",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@matincz/telegram-bot-core": "workspace:*",
+    "dotenv": "^17.3.1",
+    "node-telegram-bot-api": "^0.67.0"
+  },
+  "devDependencies": {
+    "@types/node-telegram-bot-api": "^0.64.6",
+    "bun-types": "^1.1.0",
+    "typescript": "^5.9.2"
+  }
+}

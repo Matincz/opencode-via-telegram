@@ -1,0 +1,22 @@
+{
+  "name": "claude-via-telegram",
+  "version": "0.1.0",
+  "description": "Telegram bridge for Claude Code CLI",
+  "main": "index.ts",
+  "type": "module",
+  "scripts": {
+    "start": "mkdir -p .runtime && bun build index.ts --target=node --outfile=.runtime/index.js && node .runtime/index.js",
+    "test": "bun test",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@matincz/telegram-bot-core": "workspace:*",
+    "dotenv": "^17.3.1",
+    "node-telegram-bot-api": "^0.67.0"
+  },
+  "devDependencies": {
+    "@types/node-telegram-bot-api": "^0.64.6",
+    "bun-types": "^1.1.0",
+    "typescript": "^5.9.2"
+  }
+}

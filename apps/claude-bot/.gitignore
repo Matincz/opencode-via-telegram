@@ -1,0 +1,14 @@
+node_modules
+.env
+.telegram-bridge.lock
+sessions-map.json
+selected-models.json
+selected-efforts.json
+chat-working-directories.json
+chat-permission-modes.json
+chat-workspace-history.json
+session-history.json
+logs
+output_to_user
+.cache
+.runtime

@@ -1,0 +1,19 @@
+{
+  "name": "agents-via-telegram",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "check:opencode": "bun run --cwd apps/opencode-bot check",
+    "check:gemini": "bun run --cwd apps/gemini-bot check",
+    "check:codex": "bun run --cwd apps/codex-bot check",
+    "check:claude": "bun run --cwd apps/claude-bot check",
+    "test:opencode": "bun run --cwd apps/opencode-bot test",
+    "test:gemini": "bun run --cwd apps/gemini-bot test",
+    "test:codex": "bun run --cwd apps/codex-bot test",
+    "test:claude": "bun run --cwd apps/claude-bot test"
+  }
+}

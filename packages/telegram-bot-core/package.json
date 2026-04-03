@@ -1,0 +1,18 @@
+{
+  "name": "@matincz/telegram-bot-core",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    "./runtime/logger": "./src/runtime/logger.ts",
+    "./runtime/single-instance": "./src/runtime/single-instance.ts",
+    "./storage/debounced-writer": "./src/storage/debounced-writer.ts",
+    "./storage/json": "./src/storage/json.ts",
+    "./telegram/callback": "./src/telegram/callback.ts",
+    "./telegram/media": "./src/telegram/media.ts",
+    "./telegram/media-group-buffer": "./src/telegram/media-group-buffer.ts",
+    "./telegram/types": "./src/telegram/types.ts",
+    "./telegram/inbound": "./src/telegram/inbound.ts",
+    "./telegram/polling-watchdog": "./src/telegram/polling-watchdog.ts",
+    "./telegram/rendering": "./src/telegram/rendering.ts"
+  }
+}

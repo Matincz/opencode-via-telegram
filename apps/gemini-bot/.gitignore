@@ -1,0 +1,7 @@
+node_modules
+.env
+.telegram-bridge.lock
+sessions-map.json
+selected-models.json
+chat-histories.json
+logs
